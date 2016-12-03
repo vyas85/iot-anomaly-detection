@@ -31,8 +31,16 @@ class FeederLine:
             self.initialize()
         else:
             self.device += 1
-            self.voltage -= random.normalvariate(self.base_drop, self.base_drop / 4.)
+            self.next_voltage()
         return self.get_values()
+
+    # Returns voltage from next device, with small chance for erroneous data
+    def next_voltage(self):
+        if self.voltage >= self.voltage * 3:  # adjust to normal voltage after anomaly
+            self.voltage /= 4.
+        self.voltage -= random.normalvariate(self.base_drop, self.base_drop / 4.)
+        if random.uniform(0, 1) <= 0.001:  # 0.1% chance of erroneous data
+            self.voltage += self.voltage * 4
 
     # Returns line number, device number, voltage at device and device ID
     def get_values(self):

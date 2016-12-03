@@ -11,4 +11,4 @@ num_devices = 5
 
 grid = PowerGrid(num_lines=num_lines, voltage=start_voltage, drop=drop_base, devices=num_devices)
 
-grid.simulate()
+grid.update()
