@@ -37,8 +37,8 @@ class FeederLine:
     # Returns voltage from next device, with small chance for erroneous data
     def next_voltage(self):
         if self.voltage >= self.voltage * 3:  # adjust to normal voltage after anomaly
-            self.voltage /= 4.
-        self.voltage -= random.normalvariate(self.base_drop, self.base_drop / 4.)
+            self.voltage = self.base_voltage - (self.base_drop * self.device)
+        self.voltage -= random.normalvariate(self.base_drop, self.base_drop / 2.)
         if random.uniform(0, 1) <= 0.001:  # 0.1% chance of erroneous data
             self.voltage += self.voltage * 4
 
@@ -49,3 +49,9 @@ class FeederLine:
     # Adjusts bonus to starting voltage
     def adjust_bonus(self, modifier):
         self.bonus += modifier
+
+    # Modifies bonus to bring back average levels
+    def correct_bonus(self):
+        modifier = (self.base_voltage - (self.base_drop * self.device) - self.voltage) / 2
+        self.adjust_bonus(modifier)
+        return modifier

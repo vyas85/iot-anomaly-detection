@@ -7,8 +7,9 @@ from powergrid import PowerGrid
 start_voltage = 26
 num_lines = 10
 drop_base = 1
-num_devices = 5
+num_devices = 10
 
 grid = PowerGrid(num_lines=num_lines, voltage=start_voltage, drop=drop_base, devices=num_devices)
 
-grid.update()
+for i in range(0, 2000):
+    print(grid.update())

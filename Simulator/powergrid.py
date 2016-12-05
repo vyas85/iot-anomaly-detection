@@ -42,16 +42,15 @@ class PowerGrid:
     def result_status(self, results):
         voltage = results[2]
         modifier = 0
+        status = ''
         if voltage > self.thresholds[1] * 2:  # Anomaly requires reporting but no action
             status = 'Anomaly'
         elif voltage > self.thresholds[1]:  # High voltage requires adjustment to line voltage modifier
             status = 'High'
-            modifier = voltage - self.thresholds[1]
-            self.modify_line(self.lines[self.get_line], modifier)
+            modifier = self.lines[self.get_line].correct_bonus()
         elif voltage < self.thresholds[0]:  # Low voltage requires adjustment to line voltage modifier
             status = 'Low'
-            modifier = self.thresholds[1] - voltage
-            self.modify_line(self.lines[self.get_line], modifier)
+            modifier = self.lines[self.get_line].correct_bonus()
         else:
             status = 'Normal'
         return status, modifier
