@@ -2,19 +2,21 @@
 
 # Import SDK packages
 from AWSIoTPythonSDK.MQTTLib import AWSIoTMQTTClient
+#import settings
 from settings import *  # importing configuration file
 from powergrid import PowerGrid  # importing PowerGrid simulator file
 import time
 import random
 import string
-
+import json
+import datetime
 
 # Initialize PowerGrid to settings in settings.py file
 grid = PowerGrid(NUM_LINES, BASE_VOLTAGE, BASE_DROP, NUM_DEVICES)
 
 
 # Update this to new topic?
-RECHARGE_ALERT_TOPIC = "device/+/rechargeAlert"  # subscribe to wildcard device_id
+SMARTMETER_TOPIC = "line/+/SmartMeterData"  # subscribe to wildcard device_id
 
 # Create a random 8-character string for connection id
 CLIENT_ID = ''.join(random.SystemRandom().choice(string.ascii_uppercase + string.digits) for _ in range(8))
@@ -33,12 +35,20 @@ CLIENT_ID = ''.join(random.SystemRandom().choice(string.ascii_uppercase + string
 #         if x.name == msg.topic.split('/')[1]:
 #             x.recharge_device_battery()
 
+#function to convert grid outputs into json payloads
+def get_payload(line,hops,voltage, status,modifier,deviceid):
+    timeStampEpoch = int(time.time() * 1000)  # update timestamp
+    timeStampIso = datetime.datetime.isoformat(datetime.datetime.now())
+    return json.dumps({"Line": line, "Hops":hops , "Modifier":modifier,"DeviceID": deviceid, "Voltage": voltage, "Status": status, "timeStampEpoch": timeStampEpoch,"timeStampIso":timeStampIso, "location": {"lat": "", "lon": ""}})
+
+
+
 # create AWS IoT MQTT client
 client = AWSIoTMQTTClient(CLIENT_ID)
 
 # configure client endpoint / port information & then set up certs
-client.configureEndpoint(settings.HOST_NAME, settings.HOST_PORT)
-client.configureCredentials(settings.ROOT_CERT, settings.PRIVATE_KEY, settings.DEVICE_CERT)
+client.configureEndpoint(HOST_NAME, HOST_PORT)
+client.configureCredentials(ROOT_CERT, PRIVATE_KEY, DEVICE_CERT)
 
 # configure client connection behavior
 client.configureOfflinePublishQueueing(-1)  # Infinite offline Publish queueing
@@ -48,10 +58,10 @@ client.configureMQTTOperationTimeout(5)  # 5 sec
 
 
 # Client subscription needs
-print("Connecting to endpoint " + settings.HOST_NAME)
+print("Connecting to endpoint " + HOST_NAME)
 client.connect()
-print("Subscribing to " + RECHARGE_ALERT_TOPIC)
-client.subscribe(RECHARGE_ALERT_TOPIC, 1, on_message)
+#print("Subscribing to " + SMARTMETER_TOPIC)
+#client.subscribe(SMARTMETER_TOPIC, 1, on_message)
 
 # start loop to begin publishing to topic
 while True:
@@ -64,6 +74,6 @@ while True:
     print("Line: " + str(out[0]) + " | Hops: " + str(out[1])+ " | Voltage: " + str(round(out[2], 3)) +
           " | Status: " + out[4] + " | Modifier: " + str(out[5]) + " | DeviceID: " + out[3])
     # Not totally sure how to set up this next line..
-    client.publish("line/" + out[0] + "/devicePayload", dev.get_payload(), settings.QOS_LEVEL)
+    client.publish("line/" + str(out[0]) + "/SmartMeterData", get_payload(line = out[0],hops = out[1],voltage = out[2],deviceid = out[3],status = out[4],modifier= out[5]), 0)
 
     time.sleep(5)  # just wait a sec before publishing next message
