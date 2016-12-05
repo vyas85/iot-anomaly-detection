@@ -1,0 +1,1211 @@
+TemplateFormatVersion" : "2010-09-09",
+
+  "Description" : "CloudFormation template that creates the resources needed for the AWS IoT Smart Meter - this includes an API, a DynamoDB table, both a Kinesis stream and a Kinesis Firehose delivery stream, a Lambda function, an SNS topic, IAM resources, amongst others",
+
+  "Parameters" : {
+    "SnsTopicEmail" : {
+      "Type" : "String",
+      "Description" : "Email address that SNS topic publishes to when Smart Meter sends an alert."
+    },
+    "KeyName": {
+      "Description": "Name of an existing EC2 KeyPair to enable SSH access to the device simulator EC2 instance",
+      "Type": "AWS::EC2::KeyPair::KeyName",
+      "ConstraintDescription": "must be the name of an existing EC2 KeyPair."
+    }
+  },
+
+  "Mappings": {
+
+     "AWSRegion2AMI": {
+      "us-east-1": {
+        "HVM64": "ami-6869aa05"
+      },
+      "us-west-2": {
+        "HVM64": "ami-7172b611"
+      },
+      "us-west-1": {
+        "HVM64": "ami-31490d51"
+      },
+      "eu-west-1": {
+        "HVM64": "ami-31328842"
+      },
+      "eu-central-1": {
+        "HVM64": "ami-e2df388d"
+      },
+      "ap-northeast-1": {
+        "HVM64": "ami-f80e0596"
+      },
+      "ap-northeast-2": {
+        "HVM64": "ami-6598510b"
+      },
+      "ap-southeast-1": {
+        "HVM64": "ami-e90dc68a"
+      },
+      "ap-southeast-2": {
+        "HVM64": "ami-f2210191"
+      },
+      "sa-east-1": {
+        "HVM64": "ami-1e159872"
+      },
+      "cn-north-1": {
+        "HVM64": "ami-49e22924"
+      }
+    }
+  },
+
+  "Resources" : {
+    "ApiGatewayLambdaInvokePermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName" : { "Fn::GetAtt" : ["SmartMeterLambdaFunctionReadFromDynamo", "Arn"] },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "apigateway.amazonaws.com",
+        "SourceAccount": { "Ref" : "AWS::AccountId" }
+      }
+    },
+    "SmartMeterKinesisStream" : {
+       "Type" : "AWS::Kinesis::Stream",
+       "Properties" : {
+          "ShardCount" : 1
+       }
+    },
+
+    "SmartMeterS3Bucket" : {
+      "Type" : "AWS::S3::Bucket",
+      "Properties" : {
+        "AccessControl": "PublicRead"
+      }
+    },
+
+    "SmartMeterElasticSearch" : {
+      "Type" : "AWS::Elasticsearch::Domain",
+      "Properties": {
+        "AccessPolicies": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": [
+                  "*"
+                ]
+              },
+              "Action": [
+                "es:*"
+              ],
+              "Resource": "*"
+            }
+          ]
+        }
+      }
+    },
+
+    "FirehoseToS3AndElasticSearchRole" : {
+      "Type" : "AWS::IAM::Role",
+      "Properties": {
+            "AssumeRolePolicyDocument": {
+               "Version" : "2012-10-17",
+               "Statement": [ {
+                  "Effect": "Allow",
+                  "Principal": {
+                     "Service": [ "firehose.amazonaws.com" ]
+                  },
+                  "Action": [ "sts:AssumeRole" ]
+               } ]
+            },
+            "Path": "/",
+            "Policies" : [ {
+               "PolicyName" : "giveFirehoseAccessToS3BucketAndElasticSearch",
+               "PolicyDocument" : {
+                  "Version": "2012-10-17",
+                  "Statement": [{
+                    "Sid": "",
+                    "Effect": "Allow",
+                    "Action": [
+                      "logs:PutLogEvents"
+                    ],
+                    "Resource": [
+                      "arn:aws:logs:*"
+                    ]
+                  },
+                  {
+                    "Sid": "",
+                    "Effect": "Allow",
+                    "Action": [
+                      "s3:AbortMultipartUpload",
+                      "s3:GetBucketLocation",
+                      "s3:GetObject",
+                      "s3:ListBucket",
+                      "s3:ListBucketMultipartUploads",
+                      "s3:PutObject"
+                    ],
+                    "Resource": [
+                      {"Fn::Join" : [ "", [ "arn:aws:s3:::", { "Ref" : "SmartMeterS3Bucket" } ] ]},
+                      {"Fn::Join" : [ "", [ "arn:aws:s3:::", { "Ref" : "SmartMeterS3Bucket" }, "/*" ] ]}
+                    ]
+                  },
+                  {
+                    "Sid": "",
+                    "Effect": "Allow",
+                    "Action": [
+                      "es:DescribeElasticsearchDomain",
+                      "es:DescribeElasticsearchDomains",
+                      "es:DescribeElasticsearchDomainConfig",
+                      "es:ESHttpPost",
+                      "es:ESHttpPut"
+                    ],
+                    "Resource": [
+                      {"Fn::GetAtt" : [ "SmartMeterElasticSearch" , "DomainArn" ]},
+                      {"Fn::Join" : [ "", [ {"Fn::GetAtt" : [ "SmartMeterElasticSearch" , "DomainArn" ]}, "/*" ] ]}
+                    ]
+                  }
+                ]
+                }
+            } ]
+         }
+    },
+     "LogGroup1": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "RetentionInDays": 7
+      }
+    },
+    "LogGroup2": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "RetentionInDays": 7
+      }
+    },
+    "LogStream1": {
+      "Type": "AWS::Logs::LogStream",
+      "Properties": {
+        "LogGroupName": {
+          "Ref": "LogGroup1"
+        },
+        "LogStreamName": "ElasticsearchDelivery"
+      }
+    },
+    "LogStream2": {
+      "Type": "AWS::Logs::LogStream",
+      "Properties": {
+        "LogGroupName": {
+          "Ref": "LogGroup2"
+        },
+        "LogStreamName": "S3Delivery"
+      }
+    },
+    "SmartMeterFirehoseDeliveryStream": {
+      "Type" : "AWS::KinesisFirehose::DeliveryStream",
+      "Properties" : {
+        "ElasticsearchDestinationConfiguration" : {
+          "BufferingHints" : {
+            "IntervalInSeconds" : 60,
+            "SizeInMBs" : 1
+          },
+           "CloudWatchLoggingOptions": {
+            "Enabled": true,
+            "LogGroupName": {
+              "Ref": "LogGroup1"
+            },
+            "LogStreamName": "ElasticsearchDelivery"
+          },
+          "DomainARN" : {"Fn::GetAtt" : [ "SmartMeterElasticSearch" , "DomainArn" ]},
+          "IndexName" : "smart-meter-device-data",
+          "IndexRotationPeriod" : "NoRotation",
+          "RetryOptions" : {
+            "DurationInSeconds" : 60
+          },
+          "RoleARN" : {"Fn::GetAtt" : [ "FirehoseToS3AndElasticSearchRole" , "Arn" ]},
+          "S3BackupMode" : "AllDocuments",
+          "S3Configuration" : {
+            "BucketARN" : {"Fn::Join" : [ "", [ "arn:aws:s3:::", { "Ref" : "SmartMeterS3Bucket" } ] ]},
+            "BufferingHints" : {
+              "IntervalInSeconds" : 60,
+              "SizeInMBs" : 1
+            },
+            "CompressionFormat" : "UNCOMPRESSED",
+            "Prefix" : "archive",
+            "RoleARN" : {"Fn::GetAtt" : [ "FirehoseToS3AndElasticSearchRole" , "Arn" ]}
+          },
+          "CloudWatchLoggingOptions": {
+              "Enabled": true,
+              "LogGroupName": {
+                "Ref": "LogGroup2"
+              },
+              "LogStreamName": "S3Delivery"
+            },
+          "TypeName" : "device-message",
+        }
+      }
+    },
+
+    "SmartMeterVpc" : {
+          "Type" : "AWS::EC2::VPC",
+          "Properties" : {
+            "CidrBlock" : "10.0.0.0/16"
+          }
+    },
+
+    "Subnet" : {
+          "Type" : "AWS::EC2::Subnet",
+          "Properties" : {
+            "VpcId" : { "Ref" : "SmartMeterVpc" },
+            "CidrBlock" : "10.0.0.0/24"
+          }
+    },
+
+    "InternetGateway" : {
+          "Type" : "AWS::EC2::InternetGateway"
+    },
+
+    "AttachGateway" : {
+           "Type" : "AWS::EC2::VPCGatewayAttachment",
+           "Properties" : {
+             "VpcId" : { "Ref" : "SmartMeterVpc" },
+             "InternetGatewayId" : { "Ref" : "InternetGateway" }
+           }
+    },
+
+    "RouteTable" : {
+          "Type" : "AWS::EC2::RouteTable",
+          "Properties" : {
+            "VpcId" : {"Ref" : "SmartMeterVpc"}
+          }
+    },
+
+    "Route" : {
+          "Type" : "AWS::EC2::Route",
+          "DependsOn" : "AttachGateway",
+          "Properties" : {
+            "RouteTableId" : { "Ref" : "RouteTable" },
+            "DestinationCidrBlock" : "0.0.0.0/0",
+            "GatewayId" : { "Ref" : "InternetGateway" }
+          }
+    },
+
+    "SubnetRouteTableAssociation" : {
+          "Type" : "AWS::EC2::SubnetRouteTableAssociation",
+          "Properties" : {
+            "SubnetId" : { "Ref" : "Subnet" },
+            "RouteTableId" : { "Ref" : "RouteTable" }
+          }
+    },
+
+    "EipAddress" : {
+          "Type" : "AWS::EC2::EIP",
+          "DependsOn" : "AttachGateway",
+          "Properties" : {
+            "Domain" : "vpc",
+            "InstanceId" : { "Ref" : "Ec2InstanceDeviceSimulator" }
+          }
+    },
+
+    "Ec2InstanceProfileRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [{
+            "Effect": "Allow",
+            "Principal": {
+              "Service": [
+                "ec2.amazonaws.com"
+              ]
+            },
+            "Action": [
+              "sts:AssumeRole"
+            ]
+          }]
+        },
+        "Policies" : [ {
+           "PolicyName" : "giveEc2InstanceAccessToS3",
+           "PolicyDocument" : {
+              "Version": "2012-10-17",
+              "Statement": {
+                "Sid": "",
+                "Effect": "Allow",
+                "Action": [
+                  "s3:*"
+                ],
+                "Resource": [
+                  {"Fn::Join" : [ "", [ "arn:aws:s3:::", { "Ref" : "SmartMeterS3Bucket" } ] ]},
+                  {"Fn::Join" : [ "", [ "arn:aws:s3:::", { "Ref" : "SmartMeterS3Bucket" }, "/*" ] ]}
+                ]
+              }
+            }
+        },
+        {
+           "PolicyName" : "giveEc2InstanceAccessToIot",
+           "PolicyDocument" : {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                "Sid": "Stmt1473228019000",
+                "Effect": "Allow",
+                "Action": [
+                    "iot:*"
+                ],
+                "Resource": [
+                    "*"
+                ]
+                }
+            ]
+            }
+        } ],
+        "Path": "/"
+      }
+    },
+
+    "Ec2InstanceProfile": {
+      "Type": "AWS::IAM::InstanceProfile",
+      "Properties": {
+        "Path": "/",
+        "Roles": [{
+          "Ref": "Ec2InstanceProfileRole"
+        }]
+      }
+    },
+
+    "Ec2InstanceSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Enable SSH access via port 22",
+        "SecurityGroupIngress": [{
+          "IpProtocol": "tcp",
+          "FromPort": "22",
+          "ToPort": "22",
+          "CidrIp": "0.0.0.0/0"
+        }],
+        "VpcId" : { "Ref" : "SmartMeterVpc" }
+      }
+    },
+
+    "Ec2InstanceDeviceSimulator": {
+      "Type": "AWS::EC2::Instance",
+      "DependsOn": "SmartMeterElasticSearch",
+      "Metadata": {
+        "AWS::CloudFormation::Init": {
+          "configSets": {
+            "InstallAndRun": ["Install"]
+          },
+          "Install": {
+            "packages": {
+              "yum": {
+                "git":[]
+              }
+            },
+            "files": {
+              "/home/ec2-user/curl.sh": {
+                "content": {
+                  "Fn::Join": [
+                    "", [
+                      "#!/bin/bash -xe\n",
+                      "curl -XPOST ", {
+                        "Fn::GetAtt": [
+                          "SmartMeterElasticSearch",
+                          "DomainEndpoint"
+                        ]
+                      },
+                      "./smart-meter-device-data -d '{",
+                      "\n",
+                      "\"mappings\" : {\n",
+                      "\"device-message\" : {\n",
+                      "\"properties\" : {\n",
+                      "\"Line\": { \"index\": \"analyzed\", \"store\": \"yes\", \"type\": \"long\"},\n",
+                      "\"Hops\": { \"index\": \"analyzed\", \"store\": \"yes\", \"type\": \"long\"},\n",
+                      "\"Voltage\": { \"index\": \"analyzed\", \"store\": \"yes\", \"type\": \"double\"},\n",
+                      "\"Status\": { \"index\": \"analyzed\", \"store\": \"yes\", \"type\": \"string\"},\n",
+                      "\"Modifier\": { \"index\": \"analyzed\", \"store\": \"yes\", \"type\": \"long\"},\n",
+                      "\"DeviceID\": { \"index\": \"analyzed\", \"store\": \"yes\", \"type\": \"string\"},\n",
+                      "\"timeStampEpoch\": { \"index\": \"analyzed\", \"store\": \"yes\", \"type\": \"long\"},\n",
+                      "\"timeStampIso\": { \"index\": \"not_analyzed\", \"store\": \"yes\", \"type\": \"date\" },\n",
+                      "\"location\": { \"index\": \"not_analyzed\", \"store\": \"yes\", \"type\": \"geo_point\" }}}}}'"
+                    ]
+                  ]
+                },
+                "mode": "000777",
+                "owner": "root",
+                "group": "root"
+              },
+              "/etc/cfn/cfn-hup.conf": {
+                "content": {
+                  "Fn::Join": [
+                    "", [
+                      "[main]\n",
+                      "stack=", {
+                        "Ref": "AWS::StackId"
+                      },
+                      "\n",
+                      "region=", {
+                        "Ref": "AWS::Region"
+                      },
+                      "\n"
+                    ]
+                  ]
+                },
+                "mode": "000400",
+                "owner": "root",
+                "group": "root"
+              },
+              "/etc/cfn/hooks.d/cfn-auto-reloader.conf": {
+                "content": {
+                  "Fn::Join": [
+                    "", [
+                      "[cfn-auto-reloader-hook]\n",
+                      "triggers=post.update\n",
+                      "path=Resources.Ec2InstanceDeviceSimulator.Metadata.AWS::CloudFormation::Init\n",
+                      "action=/opt/aws/bin/cfn-init -v ",
+                      "         --stack ", {
+                        "Ref": "AWS::StackName"
+                      },
+                      "         --resource Ec2InstanceDeviceSimulator ",
+                      "         --configsets InstallAndRun ",
+                      "         --region ", {
+                        "Ref": "AWS::Region"
+                      },
+                      "\n",
+                      "runas=root\n"
+                    ]
+                  ]
+                }
+              }
+            },
+            "commands": {
+              "00_CreateElasticSearchIndexMapping": {
+                "command": "sh /home/ec2-user/curl.sh > /home/ec2-user/curl.log",
+                "cwd": "/home/ec2-user/",
+                "ignoreErrors": "true"
+              },
+              "01_DownloadAndUnpackDeviceSimScript": {
+                "command": "wget https://s3.amazonaws.com/iot-pilot-light/static/code/device-simulator-script.zip; unzip device-simulator-script.zip; sudo chown -R ec2-user /home/ec2-user; sudo aws iot create-keys-and-certificate --set-as-active --certificate-pem-outfile ./certs/certificate.pem.crt --private-key-outfile ./certs/private.pem.key --region us-east-1; rm device-simulator-script.zip; sudo chown -R ec2-user /home/ec2-user",
+                "cwd": "/home/ec2-user/",
+                "ignoreErrors": "true"
+              },
+              "02_PipInstallRequirements": {
+                "command": "sudo pip install -r requirements.txt",
+                "cwd": "/home/ec2-user/",
+                "ignoreErrors": "true"
+              },
+              "03_CopyTrainingDataToS3ForMachineLearning": {
+                "command": {"Fn::Join": [
+                  "", ["wget https://s3.amazonaws.com/iot-pilot-light/static/code/trainingDataSetForML.csv; aws s3 cp ./trainingDataSetForML.csv s3://", { "Ref" : "SmartMeterS3Bucket"} ] ] },
+                "cwd": "/home/ec2-user/",
+                "ignoreErrors": "true"
+            },
+            "04_DownloadAndUnpackDashboard": {
+              "command": "wget https://s3.amazonaws.com/iot-pilot-light/static/code/realtime-dashboard.zip; unzip realtime-dashboard.zip; rm realtime-dashboard.zip; sudo chown -R ec2-user /home/ec2-user/dashboard",
+              "cwd": "/home/ec2-user/",
+              "ignoreErrors": "true"
+            }
+        },
+            "services": {
+              "sysvinit": {
+                "cfn-hup": {
+                  "enabled": "true",
+                  "ensureRunning": "true",
+                  "files": [
+                    "/etc/cfn/cfn-hup.conf",
+                    "/etc/cfn/hooks.d/cfn-auto-reloader.conf"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "Properties": {
+        "ImageId": {
+          "Fn::FindInMap": [
+            "AWSRegion2AMI", {
+              "Ref": "AWS::Region"
+            },
+            "HVM64"
+          ]
+        },
+        "NetworkInterfaces": [ {
+          "DeviceIndex": "0",
+          "GroupSet": [{ "Ref" : "Ec2InstanceSecurityGroup" }],
+          "SubnetId": { "Ref" : "Subnet" }
+        } ],
+        "InstanceType": "t2.medium",
+        "KeyName": {
+          "Ref": "KeyName"
+        },
+        "IamInstanceProfile": {
+          "Ref": "Ec2InstanceProfile"
+        },
+        "UserData": {
+          "Fn::Base64": {
+            "Fn::Join": [
+              "", [
+                "#!/bin/bash -xe\n",
+                "date > /home/ec2-user/starttime\n",
+                "yum update -y aws-cfn-bootstrap\n",
+                "# Install the files and packages from the metadata\n",
+                "/opt/aws/bin/cfn-init -v ",
+                "         --stack ", {
+                  "Ref": "AWS::StackName"
+                },
+                "         --resource Ec2InstanceDeviceSimulator ",
+                "         --configsets InstallAndRun ",
+                "         --region ", {
+                  "Ref": "AWS::Region"
+                },
+                "\n",
+                "date > /home/ec2-user/intertime",
+                "# Signal the status from cfn-init\n",
+                "/opt/aws/bin/cfn-signal -e $? ",
+                "         --stack ", {
+                  "Ref": "AWS::StackName"
+                },
+                "         --resource Ec2InstanceDeviceSimulator ",
+                "         --region ", {
+                  "Ref": "AWS::Region"
+                },
+                "\n",
+                "date > /home/ec2-user/stoptime"
+              ]
+            ]
+          }
+        }
+      }
+    },
+
+    "AwsIotToFirehoseDeliveryStreamRole" : {
+      "Type" : "AWS::IAM::Role",
+      "Properties": {
+            "AssumeRolePolicyDocument": {
+               "Version" : "2012-10-17",
+               "Statement": [ {
+                  "Effect": "Allow",
+                  "Principal": {
+                     "Service": [ "iot.amazonaws.com" ]
+                  },
+                  "Action": [ "sts:AssumeRole" ]
+               } ]
+            },
+            "Path": "/",
+            "Policies" : [ {
+               "PolicyName" : "giveIotAccessToFirehoseDeliveryStream",
+               "PolicyDocument" : {
+                  "Version": "2012-10-17",
+                  "Statement": {
+                    "Effect": "Allow",
+                    "Action": [
+                      "firehose:PutRecord"
+                  ],
+                    "Resource": {"Fn::Join" : [ "", [ "arn:aws:firehose:", { "Ref" : "AWS::Region" },":", { "Ref" : "AWS::AccountId" } ,":deliverystream/",{ "Ref": "SmartMeterFirehoseDeliveryStream"} ] ]}
+                  }
+                }
+            } ]
+         }
+    },
+
+    "AwsIotToKinesisStreamRole" : {
+      "Type" : "AWS::IAM::Role",
+      "Properties": {
+            "AssumeRolePolicyDocument": {
+               "Version" : "2012-10-17",
+               "Statement": [ {
+                  "Effect": "Allow",
+                  "Principal": {
+                     "Service": [ "iot.amazonaws.com" ]
+                  },
+                  "Action": [ "sts:AssumeRole" ]
+               } ]
+            },
+            "Path": "/",
+            "Policies" : [ {
+               "PolicyName" : "giveIotAccessToKinesisStream",
+               "PolicyDocument" : {
+                  "Version": "2012-10-17",
+                  "Statement": {
+                    "Effect": "Allow",
+                    "Action": [
+                      "kinesis:PutRecord",
+                      "kinesis:PutRecords"
+                  ],
+                    "Resource": { "Fn::GetAtt" : [ "SmartMeterKinesisStream", "Arn" ] }
+                  }
+                }
+            } ]
+         }
+    },
+
+    "SmartMeterSnsTopic" : {
+      "Type" : "AWS::SNS::Topic",
+        "Properties" : {
+          "Subscription" : [ {
+                        "Endpoint": {
+                            "Ref": "SnsTopicEmail"
+                        },
+                        "Protocol": "email"
+                    } ]
+        }
+    },
+
+    "AwsIotToSnsTopicRole" : {
+      "Type" : "AWS::IAM::Role",
+      "Properties": {
+            "AssumeRolePolicyDocument": {
+               "Version" : "2012-10-17",
+               "Statement": [ {
+                  "Effect": "Allow",
+                  "Principal": {
+                     "Service": [ "iot.amazonaws.com" ]
+                  },
+                  "Action": [ "sts:AssumeRole" ]
+               } ]
+            },
+            "Path": "/",
+            "Policies" : [ {
+               "PolicyName" : "giveIotAccessToSnsTopic",
+               "PolicyDocument" : {
+                  "Version": "2012-10-17",
+                  "Statement": {
+                    "Effect": "Allow",
+                    "Action": "sns:Publish",
+                    "Resource": { "Ref" : "SmartMeterSnsTopic" }
+                  }
+                }
+            } ]
+         }
+    },
+
+    "SmartMeterRestApiDeployment": {
+      "Type": "AWS::ApiGateway::Deployment",
+      "Properties": {
+        "RestApiId": { "Ref": "SmartMeterRestApi" },
+        "Description": "SmartMeter deployment for REST API",
+        "StageName": "DummyStage"
+      }
+    },
+
+    "SmartMeterRestApiStage": {
+      "Type": "AWS::ApiGateway::Stage",
+      "Properties": {
+        "StageName": "prod",
+        "Description": "Prod Stage",
+        "RestApiId": { "Ref": "SmartMeterRestApi" },
+        "DeploymentId": { "Ref": "SmartMeterRestApiDeployment" }
+      }},
+
+    "SmartMeterRestApi" : {
+      "Type" : "AWS::ApiGateway::RestApi",
+      "Properties" : {
+
+        "Description" : "Creates an API Gateway Restful API that pulls data from the DynamoDB table and returns it as JSON",
+        "Name" : { "Fn::Join" :  [ "",
+          [ { "Ref" : "AWS::StackName" }, "-SmartMeterRestApi" ]
+          ]
+        },
+        "Body" : {
+  "swagger": "2.0",
+  "info": {
+    "version": "2016-08-18T07:31:15Z",
+    "title": "iotSmartMeterTimeSeriesAndDeviceStatus"
+  },
+  "basePath": "/prod",
+  "schemes": [
+    "https"
+  ],
+  "paths": {
+    "/": {
+      "get": {
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "200 response",
+            "schema": {
+              "$ref": "#/definitions/Empty"
+            },
+            "headers": {
+              "Access-Control-Allow-Origin": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "x-amazon-apigateway-integration": {
+          "uri": { "Fn::Join" :  [ "",
+                    [ "arn:aws:apigateway:", { "Ref" : "AWS::Region" }, ":lambda:path/2015-03-31/functions/",{ "Fn::GetAtt" : [ "SmartMeterLambdaFunctionReadFromDynamo", "Arn" ] }, "/invocations" ]
+                  ]
+                },
+          "passthroughBehavior": "when_no_match",
+          "responses": {
+            "default": {
+              "statusCode": "200",
+              "responseParameters": {
+                "method.response.header.Access-Control-Allow-Origin": "'*'"
+              }
+            }
+          },
+          "httpMethod": "POST",
+          "type": "aws"
+        }
+      },
+      "options": {
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "200 response",
+            "schema": {
+              "$ref": "#/definitions/Empty"
+            },
+            "headers": {
+              "Access-Control-Allow-Origin": {
+                "type": "string"
+              },
+              "Access-Control-Allow-Methods": {
+                "type": "string"
+              },
+              "Access-Control-Allow-Headers": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "x-amazon-apigateway-integration": {
+          "requestTemplates": {
+            "application/json": "{\"statusCode\": 200}"
+          },
+          "passthroughBehavior": "when_no_match",
+          "responses": {
+            "default": {
+              "statusCode": "200",
+              "responseParameters": {
+                "method.response.header.Access-Control-Allow-Methods": "'GET,OPTIONS'",
+                "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'",
+                "method.response.header.Access-Control-Allow-Origin": "'*'"
+              }
+            }
+          },
+          "type": "mock"
+        }
+      }
+    },
+    "/{line}": {
+      "get": {
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "line",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "200 response",
+            "schema": {
+              "$ref": "#/definitions/Empty"
+            },
+            "headers": {
+              "Access-Control-Allow-Origin": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "x-amazon-apigateway-integration": {
+          "requestTemplates": {
+            "application/json": "{ \"line\": \"$input.params('line')\",\n\"httpMethod\":\"$context.httpMethod\"}"
+          },
+          "uri": { "Fn::Join" :  [ "",
+                    [ "arn:aws:apigateway:", { "Ref" : "AWS::Region" }, ":lambda:path/2015-03-31/functions/",{ "Fn::GetAtt" : [ "SmartMeterLambdaFunctionReadFromDynamo", "Arn" ] }, "/invocations" ]
+                  ]
+                },
+          "passthroughBehavior": "when_no_templates",
+          "responses": {
+            "default": {
+              "statusCode": "200",
+              "responseParameters": {
+                "method.response.header.Access-Control-Allow-Origin": "'*'"
+              }
+            }
+          },
+          "httpMethod": "POST",
+          "type": "aws"
+        }
+      },
+      "options": {
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "200 response",
+            "schema": {
+              "$ref": "#/definitions/Empty"
+            },
+            "headers": {
+              "Access-Control-Allow-Origin": {
+                "type": "string"
+              },
+              "Access-Control-Allow-Methods": {
+                "type": "string"
+              },
+              "Access-Control-Allow-Headers": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "x-amazon-apigateway-integration": {
+          "requestTemplates": {
+            "application/json": "{\"statusCode\": 200}"
+          },
+          "passthroughBehavior": "when_no_match",
+          "responses": {
+            "default": {
+              "statusCode": "200",
+              "responseParameters": {
+                "method.response.header.Access-Control-Allow-Methods": "'GET,OPTIONS'",
+                "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'",
+                "method.response.header.Access-Control-Allow-Origin": "'*'"
+              }
+            }
+          },
+          "type": "mock"
+        }
+      }
+    }
+  },
+  "definitions": {
+    "Empty": {
+      "type": "object"
+    }
+  }
+}
+
+
+      }
+    },
+
+    "SmartMeterLambdaFunctionReadFromDynamo" : {
+
+      "Type" : "AWS::Lambda::Function",
+        "Properties" : {
+          "Code" : {
+            "ZipFile":  { "Fn::Join": ["", [
+              "'use strict';\n",
+              "console.log('Loading function');\n",
+              "let response = require('cfn-response');\n",
+              "let doc = require('dynamodb-doc');\n",
+              "let dynamo = new doc.DynamoDB();\n",
+              "exports.handler = (event, context, callback) => {\n",
+              "   console.log('Received event:', JSON.stringify(event, null, 2));\n",
+              "   // is a line passed? if yes, query on data in time series table for that device. if not, scan the device status table\n",
+              "   if (event.line) {\n",
+              "   // need to get data from last 5 minutes, so set up var to store target timestamp\n",
+              "   let timestampRange = (new Date()).getTime() - (300 * 1000);\n",
+              "   let params = {\n",
+              "       TableName: '", { "Ref" : "SmartMeterDynamoTimeSeriesTable" }, "',\n",
+              "       KeyConditionExpression: 'line = :hkey and payloadTimestamp > :rkey',\n",
+              "       ExpressionAttributeValues: {\n",
+              "           ':hkey': event.line,\n",
+              "           ':rkey': timestampRange\n",
+              "       }\n",
+              "   };\n",
+              "   dynamo.query(params, function(err, data) {\n",
+              "       if (err) {console.log(err, err.stack);\n",
+              "           callback(null, {});\n",
+              "       }\n",
+              "       else  {   console.log(data);\n",
+              "           callback(null, data);\n",
+              "       }\n",
+              "   });\n",
+              "}\n",
+              "else {\n",
+                    "let params = {\n",
+                    "TableName: '", { "Ref" : "SmartMeterDynamoDeviceStatusTable" }, "',\n",
+                  "};\n",
+                    "dynamo.scan(params, function(err, data) {\n",
+                  "if (err) {console.log(err, err.stack); // an error occurred\n",
+                            "callback(null, {});\n",
+                  "}\n",
+                  "else  {   console.log(data);           // successful response\n",
+                            "callback(null, data);\n",
+                  "}\n",
+                "});\n",
+              "}\n",
+              "};\n"
+            ]]}
+          },
+          "Description" : "Function that reads data from a DynamoDB table and returns it to API Gateway",
+          "Handler" : "index.handler",
+          "MemorySize" : 128,
+          "Role" : { "Fn::GetAtt" : ["LambdaFromDynamoRole", "Arn"] },
+          "Runtime" : "nodejs4.3",
+          "Timeout" : 5
+        }
+
+    },
+
+    "ApiGatewayToLambdaInvokePermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName" : { "Fn::GetAtt" : ["SmartMeterLambdaFunctionReadFromDynamo", "Arn"] },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "apigateway.amazonaws.com"
+      }
+    },
+
+    "SmartMeterDynamoTimeSeriesTable" : {
+      "Type" : "AWS::DynamoDB::Table",
+        "Properties" : {
+          "AttributeDefinitions": [ {
+          "AttributeName" : "line",
+          "AttributeType" : "N"
+        },
+        {
+          "AttributeName" : "payloadTimestamp",
+          "AttributeType" : "N"
+        }],
+        "KeySchema": [
+          { "AttributeName": "line", "KeyType": "HASH" },
+          { "AttributeName": "payloadTimestamp", "KeyType": "RANGE" }
+        ],
+        "ProvisionedThroughput" : {
+          "ReadCapacityUnits" : 5,
+          "WriteCapacityUnits" : 5
+        }
+        }
+    },
+
+    "SmartMeterDynamoDeviceStatusTable" : {
+      "Type" : "AWS::DynamoDB::Table",
+        "Properties" : {
+          "AttributeDefinitions": [ {
+          "AttributeName" : "line",
+          "AttributeType" : "N"
+        }],
+        "KeySchema": [
+          { "AttributeName": "line", "KeyType": "HASH" }
+        ],
+        "ProvisionedThroughput" : {
+          "ReadCapacityUnits" : 5,
+          "WriteCapacityUnits" : 5
+        }
+        }
+    },
+
+    "AwsIotToDynamoRole" : {
+      "Type" : "AWS::IAM::Role",
+      "Properties": {
+            "AssumeRolePolicyDocument": {
+               "Version" : "2012-10-17",
+               "Statement": [ {
+                  "Effect": "Allow",
+                  "Principal": {
+                     "Service": [ "iot.amazonaws.com" ]
+                  },
+                  "Action": [ "sts:AssumeRole" ]
+               } ]
+            },
+            "Path": "/",
+            "Policies" : [ {
+               "PolicyName" : "giveIotWriteAccessToDynamoTables",
+               "PolicyDocument" : {
+                  "Version": "2012-10-17",
+                  "Statement": {
+                    "Effect": "Allow",
+                    "Action": [
+                      "dynamodb:BatchWriteItem",
+                      "dynamodb:ListTables",
+                      "dynamodb:PutItem",
+                      "dynamodb:UpdateItem"],
+                    "Resource":
+                      [{ "Fn::Join" :  [ "",
+                        [ "arn:aws:dynamodb:", { "Ref" : "AWS::Region" }, ":",{ "Ref" : "AWS::AccountId" },":table/", { "Ref" : "SmartMeterDynamoTimeSeriesTable" } ]
+                      ]
+                    },
+                    { "Fn::Join" :  [ "",
+                      [ "arn:aws:dynamodb:", { "Ref" : "AWS::Region" }, ":",{ "Ref" : "AWS::AccountId" },":table/", { "Ref" : "SmartMeterDynamoDeviceStatusTable" } ]
+                    ]
+                  }
+                  ]
+                  }
+                }
+            } ]
+         }
+    },
+    "LambdaToMLandSNS" : {
+      "Type" : "AWS::IAM::Role",
+      "Properties": {
+            "AssumeRolePolicyDocument": {
+               "Version" : "2012-10-17",
+               "Statement": [ {
+                  "Effect": "Allow",
+                  "Principal": {
+                     "Service": [ "lambda.amazonaws.com" ]
+                  },
+                  "Action": [ "sts:AssumeRole" ]
+               } ]
+            },
+            "Path": "/",
+            "Policies" : [ {
+               "PolicyName" : "giveLambdaAccessToMachineLearningAndSNS",
+               "PolicyDocument" : {
+                  "Version": "2012-10-17",
+                  "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "kinesis:DescribeStream",
+                "kinesis:GetRecords",
+                "kinesis:GetShardIterator"
+            ],
+            "Resource":
+            { "Fn::GetAtt" : [ "SmartMeterKinesisStream", "Arn" ] }
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "machinelearning:Predict",
+                "machinelearning:GetMLModel"
+            ],
+            "Resource": [
+                { "Fn::Join" :  [ "",
+                        [ "arn:aws:machinelearning:us-east-1:", { "Ref" : "AWS::AccountId" } ,":mlmodel/*"]
+                      ]
+                    }
+                  ]
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "SNS:Publish"
+            ],
+            "Resource":  { "Ref" : "SmartMeterSnsTopic" }
+        },
+        {
+          "Effect": "Allow",
+          "Action": [
+            "logs:CreateLogGroup",
+            "logs:CreateLogStream",
+            "logs:PutLogEvents"
+          ],
+          "Resource": "arn:aws:logs:*:*:*"
+        }
+    ]
+                }
+            } ]
+         }
+    },
+    "LambdaFromDynamoRole" : {
+      "Type" : "AWS::IAM::Role",
+      "Properties": {
+            "AssumeRolePolicyDocument": {
+               "Version" : "2012-10-17",
+               "Statement": [ {
+                  "Effect": "Allow",
+                  "Principal": {
+                     "Service": [ "lambda.amazonaws.com" ]
+                  },
+                  "Action": [ "sts:AssumeRole" ]
+               } ]
+            },
+            "Path": "/",
+            "Policies" : [ {
+               "PolicyName" : "giveLambdaReadAccessToDynamoTable",
+               "PolicyDocument" : {
+                  "Version": "2012-10-17",
+                  "Statement": [{
+                    "Effect": "Allow",
+                    "Action": [
+                      "dynamodb:BatchGetItem",
+                      "dynamodb:GetItem",
+                      "dynamodb:ListTables",
+                      "dynamodb:Query",
+                      "dynamodb:Scan"],
+                    "Resource":
+                      [{ "Fn::Join" :  [ "",
+                        [ "arn:aws:dynamodb:", { "Ref" : "AWS::Region" }, ":",{ "Ref" : "AWS::AccountId" },":table/", { "Ref" : "SmartMeterDynamoTimeSeriesTable" } ]
+                      ]
+                    },
+                    { "Fn::Join" :  [ "",
+                      [ "arn:aws:dynamodb:", { "Ref" : "AWS::Region" }, ":",{ "Ref" : "AWS::AccountId" },":table/", { "Ref" : "SmartMeterDynamoDeviceStatusTable" } ]
+                    ]
+                  }]
+                  },
+                  {
+                    "Effect": "Allow",
+                    "Action": [
+                      "logs:CreateLogGroup",
+                      "logs:CreateLogStream",
+                      "logs:PutLogEvents"
+                    ],
+                    "Resource": "arn:aws:logs:*:*:*"
+                  }
+                ]
+                }
+            } ]
+         }
+    },
+    "AwsIotRepublishRole" : {
+      "Type" : "AWS::IAM::Role",
+      "Properties": {
+            "AssumeRolePolicyDocument": {
+               "Version" : "2012-10-17",
+               "Statement": [ {
+                  "Effect": "Allow",
+                  "Principal": {
+                     "Service": [ "iot.amazonaws.com" ]
+                  },
+                  "Action": [ "sts:AssumeRole" ]
+               } ]
+            },
+            "Path": "/",
+            "Policies" : [ {
+               "PolicyName" : "giveAwsIotRightsToRepublish",
+               "PolicyDocument" : {
+                  "Version": "2012-10-17",
+                  "Statement": {
+                    "Effect": "Allow",
+                    "Action": [
+                      "iot:Publish"],
+                    "Resource":
+                      { "Fn::Join" :  [ "",
+                        [ "arn:aws:iot:", { "Ref" : "AWS::Region" }, ":",{ "Ref" : "AWS::AccountId" },":topic/line/*/SmartMeterData" ]
+                      ]
+                    }
+                  }
+                }
+            } ]
+         }
+    }
+  },
+
+  "Outputs" : {
+
+    "SnsTopicArn" : {
+      "Description" : "ARN of the SNS topic",
+      "Value" :  { "Ref" : "SmartMeterSnsTopic" }
+    },
+    "IpAddressEc2DeviceSimulator" : {
+      "Description" : "Public IP of the EC2 Device Simulator",
+      "Value" : { "Ref" : "EipAddress" }
+    },
+    "S3BucketName" : {
+      "Description" : "Name of the S3 bucket forSmart Meter",
+      "Value" : { "Ref" : "SmartMeterS3Bucket" }
+    }
+  }
+}
+

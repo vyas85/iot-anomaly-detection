@@ -2,7 +2,7 @@
 Modify these values to match your configuration
 """
 # AWS IoT endpoint settings
-HOST_NAME = "A13LKZQ7FMT4VZ.iot.us-west-2.amazonaws.com" # replace with your AWS IoT endpoint for your region
+HOST_NAME = "akiivb3cx1ocl.iot.us-east-1.amazonaws.com" # replace with your AWS IoT endpoint for your region
 HOST_PORT = 8883 # leave this as-is
 # thing certs & keys
 PRIVATE_KEY = "certs/private.pem.key" # replace with your private key name
