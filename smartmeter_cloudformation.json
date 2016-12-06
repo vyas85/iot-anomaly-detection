@@ -971,7 +971,7 @@ TemplateFormatVersion" : "2010-09-09",
         "Properties" : {
           "AttributeDefinitions": [ {
           "AttributeName" : "line",
-          "AttributeType" : "N"
+          "AttributeType" : "S"
         },
         {
           "AttributeName" : "payloadTimestamp",
@@ -993,7 +993,7 @@ TemplateFormatVersion" : "2010-09-09",
         "Properties" : {
           "AttributeDefinitions": [ {
           "AttributeName" : "line",
-          "AttributeType" : "N"
+          "AttributeType" : "S"
         }],
         "KeySchema": [
           { "AttributeName": "line", "KeyType": "HASH" }
@@ -1208,4 +1208,5 @@ TemplateFormatVersion" : "2010-09-09",
     }
   }
 }
+
 
