@@ -15,6 +15,7 @@ import datetime
 grid = PowerGrid(NUM_LINES, BASE_VOLTAGE, BASE_DROP, NUM_DEVICES)
 
 
+
 # Update this to new topic?
 SMARTMETER_TOPIC = "line/+/SmartMeterData"  # subscribe to wildcard device_id
 
@@ -37,9 +38,11 @@ CLIENT_ID = ''.join(random.SystemRandom().choice(string.ascii_uppercase + string
 
 #function to convert grid outputs into json payloads
 def get_payload(line,hops,voltage, status,modifier,deviceid):
+    lat = 35.929673
+    lon = -78.948237
     timeStampEpoch = int(time.time() * 1000)  # update timestamp
     timeStampIso = datetime.datetime.isoformat(datetime.datetime.now())
-    return json.dumps({"Line": line, "Hops":hops , "Modifier":modifier,"DeviceID": deviceid, "Voltage": voltage, "Status": status, "timeStampEpoch": timeStampEpoch,"timeStampIso":timeStampIso, "location": {"lat": "", "lon": ""}})
+    return json.dumps({"Line": line, "Hops":hops , "Modifier":modifier,"DeviceID": deviceid, "Voltage": voltage, "Status": status, "timeStampEpoch": timeStampEpoch,"timeStampIso":timeStampIso, "location": {"lat": lat, "lon": lon}})
 
 
 
@@ -63,8 +66,15 @@ client.connect()
 #print("Subscribing to " + SMARTMETER_TOPIC)
 #client.subscribe(SMARTMETER_TOPIC, 1, on_message)
 
+'''
+#create ML training file
+with open('MIDS-W205_Project/Simulator/TrainDataForML.csv','w') as f:
+        f.write('Line,Voltage\n')
+'''
+
 # start loop to begin publishing to topic
-while True:
+#while True:
+for i in range(1,50):
 
 
 # (0, 1, 122.59035312697337, 'bdda906d-ff31-4f87-bdd4-0269add37674', 'Normal', 0)
@@ -76,4 +86,15 @@ while True:
     # Not totally sure how to set up this next line..
     client.publish("line/" + str(out[0]) + "/SmartMeterData", get_payload(line = out[0],hops = out[1],voltage = out[2],deviceid = out[3],status = out[4],modifier= out[5]), 0)
 
+
+    #This chunk of code below creates a csv file for the ML component of the project
+    '''
+    with open('MIDS-W205_Project/Simulator/TrainDataForML.csv','a') as f:    
+        f.write(str(out[0])+','+str(out[2])+'\n')
+    f.close()
+    '''
     time.sleep(5)  # just wait a sec before publishing next message
+
+    
+
+client.disconnect()
