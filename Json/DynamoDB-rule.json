@@ -1,0 +1,30 @@
+{
+    "description": "Writing data to DynamoDB", 
+    "actions": [
+            {
+                "dynamoDB": {
+                    "rangeKeyType": "NUMBER", 
+                    "hashKeyType": "STRING", 
+                    "hashKeyField": "line", 
+                    "roleArn": "arn:aws:iam::129288622091:role/SmartMeter-AwsIotToDynamoRole-SW79EFVRT79M", 
+                    "tableName": "SmartMeter-SmartMeterDynamoTimeSeriesTable-3PBSEFTPBKZM", 
+                    "hashKeyValue": "${topic(2)}", 
+                    "rangeKeyValue": "${timeStampEpoch}", 
+                    "rangeKeyField": "payloadTimestamp"
+                }
+            }, 
+            {
+                "dynamoDB": {
+                    "hashKeyValue": "${topic(2)}", 
+                    "roleArn": "arn:aws:iam::129288622091:role/SmartMeter-AwsIotToDynamoRole-SW79EFVRT79M", 
+                    "tableName": "SmartMeter-SmartMeterDynamoDeviceStatusTable-HK81JYNQ759Z", 
+                    "hashKeyType": "STRING", 
+                    "hashKeyField": "line"
+                }
+            }
+        ], 
+        "sql": "SELECT * FROM 'line/+/SmartMeterData'", 
+        "awsIotSqlVersion": "2016-03-23", 
+        "ruleDisabled": false
+
+}
