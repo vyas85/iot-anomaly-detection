@@ -1,4 +1,5 @@
-TemplateFormatVersion" : "2010-09-09",
+{
+  "AWSTemplateFormatVersion" : "2010-09-09",
 
   "Description" : "CloudFormation template that creates the resources needed for the AWS IoT Smart Meter - this includes an API, a DynamoDB table, both a Kinesis stream and a Kinesis Firehose delivery stream, a Lambda function, an SNS topic, IAM resources, amongst others",
 
