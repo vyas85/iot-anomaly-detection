@@ -86,12 +86,12 @@ for i in range(1,500): # 500 for 5 min run
     # Not totally sure how to set up this next line..
     client.publish("line/" + str(out[0]) + "/SmartMeterData", get_payload(line = out[0],hops = out[1],voltage = out[2],deviceid = out[3],status = out[4],modifier= out[5]), 0)
 
-    '''
+'''
     #This chunk of code below creates a csv file for the ML component of the project
     with open('MIDS-W205_Project/Simulator/TrainDataForML.csv','a') as f:
         f.write(str(out[0])+','+str(out[2])+'\n')
     f.close()
-    '''
+'''
 
     time.sleep(0.5)  # wait 0.5 sec before publishing next message.
 
