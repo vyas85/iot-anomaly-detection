@@ -74,7 +74,7 @@ with open('MIDS-W205_Project/Simulator/TrainDataForML.csv','w') as f:
 
 # start loop to begin publishing to topic
 #while True:
-for i in range(1,500):
+for i in range(1,150): # Set to 150 for demo, while real test should be 2500
 
 
 # (0, 1, 122.59035312697337, 'bdda906d-ff31-4f87-bdd4-0269add37674', 'Normal', 0)
@@ -93,7 +93,7 @@ for i in range(1,500):
         f.write(str(out[0])+','+str(out[2])+'\n')
     f.close()
     '''
-    time.sleep(5)  # just wait a sec before publishing next message
+    time.sleep(0.5)  # just wait 0.5 sec before publishing next message
 
 
 
