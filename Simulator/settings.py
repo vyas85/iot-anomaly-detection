@@ -14,4 +14,4 @@ QOS_LEVEL = 0 # AWS IoT supports QoS levels 0 & 1 for MQTT sessions
 NUM_LINES = 20
 BASE_VOLTAGE = 123
 BASE_DROP = 1
-NUM_DEVICES = 15
+NUM_DEVICES = 40
