@@ -1,4 +1,5 @@
-TemplateFormatVersion" : "2010-09-09",
+{
+  "AWSTemplateFormatVersion" : "2010-09-09",
 
   "Description" : "CloudFormation template that creates the resources needed for the AWS IoT Smart Meter - this includes an API, a DynamoDB table, both a Kinesis stream and a Kinesis Firehose delivery stream, a Lambda function, an SNS topic, IAM resources, amongst others",
 
@@ -17,7 +18,7 @@ TemplateFormatVersion" : "2010-09-09",
   "Mappings": {
 
      "AWSRegion2AMI": {
-      "us-east-1": {
+     "us-east-1": {
         "HVM64": "ami-6869aa05"
       },
       "us-west-2": {
@@ -475,27 +476,11 @@ TemplateFormatVersion" : "2010-09-09",
                 "cwd": "/home/ec2-user/",
                 "ignoreErrors": "true"
               },
-              "01_DownloadAndUnpackDeviceSimScript": {
-                "command": "wget https://s3.amazonaws.com/iot-pilot-light/static/code/device-simulator-script.zip; unzip device-simulator-script.zip; sudo chown -R ec2-user /home/ec2-user; sudo aws iot create-keys-and-certificate --set-as-active --certificate-pem-outfile ./certs/certificate.pem.crt --private-key-outfile ./certs/private.pem.key --region us-east-1; rm device-simulator-script.zip; sudo chown -R ec2-user /home/ec2-user",
-                "cwd": "/home/ec2-user/",
-                "ignoreErrors": "true"
-              },
-              "02_PipInstallRequirements": {
+              "01_PipInstallRequirements": {
                 "command": "sudo pip install -r requirements.txt",
                 "cwd": "/home/ec2-user/",
                 "ignoreErrors": "true"
-              },
-              "03_CopyTrainingDataToS3ForMachineLearning": {
-                "command": {"Fn::Join": [
-                  "", ["wget https://s3.amazonaws.com/iot-pilot-light/static/code/trainingDataSetForML.csv; aws s3 cp ./trainingDataSetForML.csv s3://", { "Ref" : "SmartMeterS3Bucket"} ] ] },
-                "cwd": "/home/ec2-user/",
-                "ignoreErrors": "true"
-            },
-            "04_DownloadAndUnpackDashboard": {
-              "command": "wget https://s3.amazonaws.com/iot-pilot-light/static/code/realtime-dashboard.zip; unzip realtime-dashboard.zip; rm realtime-dashboard.zip; sudo chown -R ec2-user /home/ec2-user/dashboard",
-              "cwd": "/home/ec2-user/",
-              "ignoreErrors": "true"
-            }
+              }
         },
             "services": {
               "sysvinit": {
