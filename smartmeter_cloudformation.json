@@ -18,7 +18,7 @@
   "Mappings": {
 
      "AWSRegion2AMI": {
-     "us-east-1": {
+      "us-east-1": {
         "HVM64": "ami-6869aa05"
       },
       "us-west-2": {
