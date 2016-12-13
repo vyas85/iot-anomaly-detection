@@ -1,0 +1,5 @@
+python MIDS-W205_Project/Simulator/app.py
+
+https://1ojb5vltmg.execute-api.us-east-1.amazonaws.com/prod
+
+curl https://1ojb5vltmg.execute-api.us-east-1.amazonaws.com/prod
