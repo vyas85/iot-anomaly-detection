@@ -114,53 +114,37 @@ We will first create a topic rule to connect our device to DynamoDB. We do this 
 In the AWS IoT Console, create a rule through “Create a Resource”
 The following parameters should be entered:
 
-```
-Field
-Value
-Name
-SmartMeterToDynamo
-Description
-Writing data to DynamoDB
-Attribute
-*
-Topic filter
-line/+/SmartMeterData
-```
+Field | Value
+--- | ---
+Name | SmartMeterToDynamo
+Description | Writing data to DynamoDB
+Attribute | *
+Topic filter | line/+/SmartMeterData
+
 
 2. We need to create two actions, one to write the payload to a database table using the timestamp as a range key value, and one to report the status. 
 Click the “Choose an action” dropdown menu and select “Insert message into a database table (DynamoDb)”;
 Choose the table whose name contains “TimeSeriesTable” in the Table name field;
 In the DynamoDB detailed section, enter the following parameters:
 
-```
-Field
-Value
-Table Name
-\<stack-name>-SmartMeterDynamoTimeSeriesTable
-Hash key value
-${topic(2)}
-Range key value
-${timeStampEpoch}
-Role name
-\<stack-name>-AwsIotToDynamoRole-\<random-number>
-```
+Field | Value 
+--- | ---
+Table Name | \<stack-name>-SmartMeterDynamoTimeSeriesTable
+Hash key value | ${topic(2)} 
+Range key value | ${timeStampEpoch}
+Role name | \<stack-name>-AwsIotToDynamoRole-\<random-number>
 
 Click the “Choose an action” dropdown menu and select “Insert message into a database table (DynamoDb)”;
 Choose the table whose name contains “TimeSeriesTable” in the Table name field;
 In the DynamoDB detailed section, enter the following parameters:
 
-```
-Field
-Value
-Table Name
-\<stack-name>-SmartMeterDynamoDeviceStatusTable
-Hash key value
-${topic(2)}
-Range key value
-leave empty
-Role name
-\<stack-name>-AwsIotToDynamoRole-\<random-number>
-```
+Field | Value
+--- | ---
+Table Name | \<stack-name>-SmartMeterDynamoDeviceStatusTable
+Hash key value | ${topic(2)}
+Range key value | leave empty
+Role name | \<stack-name>-AwsIotToDynamoRole-\<random-number>
+
 
 Click Create.
 
@@ -218,7 +202,7 @@ Now you can go to the AWS Elasticsearch management console and select the SmartM
 The first step is to generate some ML training data. We did that by running the app.py Simulator code modified to as below:
 
 ```
-create ML training file
+#create ML training file
 with open('MIDS-W205_Project/Simulator/TrainDataForML.csv','w') as f:
       f.write('Line,Voltage\n')
 
@@ -270,18 +254,14 @@ We need to create one Lambda function to attach to the Kinesis Stream and config
 
 
 In the configure function screen, we configure the following:
-```
-Field
-Value
-Name
-ML-Lambda_SmartMeter
-Runtime
-Python 2.7
-Code entry type
-Edit Code Inline
-Lambda Function Code
-Paste in code from smartmeter_lambdaml.py
-```
+
+Field | Value
+--- | ---
+Name | ML-Lambda_SmartMeter
+Runtime | Python 2.7
+Code entry type | Edit Code Inline
+Lambda Function Code | Paste in code from smartmeter_lambdaml.py
+
 
 In line 11 of the function, we change the ml_modeId with the ML ID from above (ev-MReIGLHgyEa).
 
@@ -301,24 +281,17 @@ We then click on Create Function to create the lambda function.
 
 
 Final setup for this test run is to create an IoT rule to place the data into the Kinesis stream. For this purpose we go back to the AWS IoT Console. In the Create a Rule screen, we configure the following as shown below:
-```
-Field
-Value
-Name
-SmartMeterML
-Attribute
-*
-Topic Filter
-line/+/SmartMeterData
-Choose an action
-Sends messages to an Amazon Kinesis stream
-Stream name
-\<Stack Name>-SmartMeterKinesisStream-\<Random>
-Partition key
-${topic(2)}
-Role Name
-\<Stack Name>-AwsIotToKinesisStreamRole-\<Random>
-```
+
+
+Field | Value
+--- | ---
+Name | SmartMeterML
+Attribute | *
+Topic Filter | line/+/SmartMeterData
+Choose an action | Sends messages to an Amazon Kinesis stream
+Stream name | \<Stack Name>-SmartMeterKinesisStream-\<Random>
+Partition key | ${topic(2)}
+Role Name | \<Stack Name>-AwsIotToKinesisStreamRole-\<Random>
 
 In our case, the Stack Name is SmartMeter. By clicking on Add Action we see that a new action has been added. Click Create to continue. We have completed the necessary steps to enable the data from IoT to be streamed to Kinesis to ML. 
 
