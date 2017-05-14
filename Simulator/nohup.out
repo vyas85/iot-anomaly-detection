@@ -1,0 +1,21 @@
+Traceback (most recent call last):
+  File "app.py", line 15, in <module>
+    grid = PowerGrid(NUM_LINES, BASE_VOLTAGE, BASE_DROP, NUM_DEVICES)
+  File "/home/ec2-user/MIDS-W205_Project/Simulator/powergrid.py", line 17, in __init__
+    self.add_line()
+  File "/home/ec2-user/MIDS-W205_Project/Simulator/powergrid.py", line 27, in add_line
+    drop=drop, num_devs=self.num_devices))
+  File "/home/ec2-user/MIDS-W205_Project/Simulator/feederline.py", line 22, in __init__
+    self.timeStampEpoch = int(time.time() * 1000)
+NameError: global name 'time' is not defined
+Connecting to endpoint akiivb3cx1ocl.iot.us-east-1.amazonaws.com
+Traceback (most recent call last):
+  File "app.py", line 65, in <module>
+    client.connect()
+  File "/usr/local/lib/python2.7/site-packages/AWSIoTPythonSDK/MQTTLib.py", line 355, in connect
+    return self._mqttCore.connect(keepAliveIntervalSecond)
+  File "/usr/local/lib/python2.7/site-packages/AWSIoTPythonSDK/core/protocol/mqttCore.py", line 279, in connect
+    self._pahoClient.tls_set(self._cafile, self._cert, self._key, ssl.CERT_REQUIRED, ssl.PROTOCOL_SSLv23)  # Throw exception...
+  File "/usr/local/lib/python2.7/site-packages/AWSIoTPythonSDK/core/protocol/paho/client.py", line 607, in tls_set
+    raise IOError(certfile+": "+err.strerror)
+IOError: certs/certificate.pem.crt: No such file or directory

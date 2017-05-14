@@ -39,7 +39,7 @@ class FeederLine:
         if self.voltage >= self.voltage * 3:  # adjust to normal voltage after anomaly
             self.voltage = self.base_voltage - (self.base_drop * self.device)
         self.voltage -= random.normalvariate(self.base_drop, self.base_drop / 2.)
-        if random.uniform(0, 1) <= 0.1:  # 0.1% chance of erroneous data
+        if random.uniform(0, 1) <= 0.1:  # 1% chance of erroneous data
             self.voltage += self.voltage * 4
 
     # Returns line number, device number, voltage at device and device ID
